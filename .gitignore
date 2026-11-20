@@ -1,0 +1,20 @@
+# Dependencias y artefactos de build.
+node_modules/
+dist/
+dist-ssr/
+
+# Variables de entorno reales: solo se versiona .env.example.
+.env
+.env.local
+.env.*.local
+
+# Logs.
+*.log
+npm-debug.log*
+
+# Editores y sistema.
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

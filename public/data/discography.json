@@ -1,0 +1,48 @@
+{
+  "title": "Discografía",
+  "intro": "Lanzamientos, sesiones y colaboraciones del club. Este archivo es estático: la página lo pide por fetch al entrar y no consulta al backend.",
+  "updated_at": "2026-11-01",
+  "releases": [
+    {
+      "id": "sesiones-vol-1",
+      "title": "Sesiones, Vol. 1",
+      "year": 2026,
+      "type": "EP",
+      "accent": "#2f9e62",
+      "description": "Cuatro temas grabados en vivo durante el primer encuentro del club.",
+      "tracks": [
+        { "title": "Punto de partida", "duration": "3:42", "featured": true },
+        { "title": "Ruido de fondo", "duration": "4:05", "featured": false },
+        { "title": "La red", "duration": "3:18", "featured": false },
+        { "title": "Cierre", "duration": "5:11", "featured": true }
+      ]
+    },
+    {
+      "id": "primer-logro",
+      "title": "Primer logro",
+      "year": 2025,
+      "type": "Single",
+      "accent": "#3ac279",
+      "description": "El primer lanzamiento del sello, con la participación de miembros de la comunidad.",
+      "tracks": [
+        { "title": "Primer logro", "duration": "3:29", "featured": true },
+        { "title": "Primer logro (acústico)", "duration": "3:47", "featured": false }
+      ]
+    },
+    {
+      "id": "archivo-2024",
+      "title": "Archivo 2024",
+      "year": 2024,
+      "type": "Recopilatorio",
+      "accent": "#12643a",
+      "description": "Una selección de demos y grabaciones caseras que dieron origen al proyecto.",
+      "tracks": [
+        { "title": "Demo de verano", "duration": "2:58", "featured": false },
+        { "title": "Boceto en gris", "duration": "3:12", "featured": false },
+        { "title": "Madrugada", "duration": "4:21", "featured": true },
+        { "title": "Archivo", "duration": "2:40", "featured": false },
+        { "title": "Fuera de toma", "duration": "1:55", "featured": false }
+      ]
+    }
+  ]
+}

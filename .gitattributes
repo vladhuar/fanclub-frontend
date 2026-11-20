@@ -1,0 +1,12 @@
+# Normaliza los finales de línea en el repositorio.
+* text=auto eol=lf
+
+# Media binaria.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.webm binary
+*.mp4 binary
+*.ico binary
