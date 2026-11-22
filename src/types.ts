@@ -96,6 +96,29 @@ export interface CreatePostPayload {
   media?: MediaInput[]
 }
 
+/** PUT /posts/{id}. Si se omite `media`, el backend conserva la actual. */
+export interface UpdatePostPayload {
+  title: string
+  content: string
+  media?: MediaInput[]
+  image_url?: string | null
+}
+
+/** PUT /users/me acepta los campos editables del perfil propio. */
+export interface UpdateProfilePayload {
+  username: string
+  name: string
+  phone: string
+  country: string
+  city: string
+  avatar_url?: string | null
+}
+
+export interface UpdateProfileResponse {
+  message: string
+  user: SessionUser
+}
+
 export interface LikeResponse {
   post_id: number
   likes_count: number

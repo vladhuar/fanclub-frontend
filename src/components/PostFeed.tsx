@@ -33,9 +33,16 @@ function FeedSkeleton() {
 
 /**
  * Listado de publicaciones con sus filtros.
- * Se reutiliza en el inicio (dentro de "Las novedades") y en la página /feed.
+ * Se reutiliza en el inicio (dentro de "Las novedades"), en /feed y en el
+ * perfil público (filtrando por autor).
  */
-export function PostFeed({ heading }: { heading?: string }) {
+export function PostFeed({
+  heading,
+  authorId,
+}: {
+  heading?: string
+  authorId?: string
+}) {
   const { user } = useAuth()
   const [sort, setSort] = useState<FeedSort>('recent')
   const [posts, setPosts] = useState<Post[]>([])
@@ -51,7 +58,7 @@ export function PostFeed({ heading }: { heading?: string }) {
     setError(null)
 
     api
-      .listPosts(sort, FEED_PAGE_SIZE, 0)
+      .listPosts(sort, FEED_PAGE_SIZE, 0, authorId)
       .then((response) => {
         if (!active) return
         setPosts(response.data ?? [])
@@ -70,13 +77,13 @@ export function PostFeed({ heading }: { heading?: string }) {
     return () => {
       active = false
     }
-  }, [sort, reloadKey])
+  }, [sort, reloadKey, authorId])
 
   const loadMore = async () => {
     if (!pagination || loadingMore) return
     setLoadingMore(true)
     try {
-      const response = await api.listPosts(sort, FEED_PAGE_SIZE, posts.length)
+      const response = await api.listPosts(sort, FEED_PAGE_SIZE, posts.length, authorId)
       setPosts((current) => {
         const seen = new Set(current.map((post) => post.id))
         return [...current, ...(response.data ?? []).filter((post) => !seen.has(post.id))]
@@ -87,6 +94,13 @@ export function PostFeed({ heading }: { heading?: string }) {
     } finally {
       setLoadingMore(false)
     }
+  }
+
+  const handleDeleted = (id: number) => {
+    setPosts((current) => current.filter((post) => post.id !== id))
+    setPagination((current) =>
+      current ? { ...current, total: Math.max(0, current.total - 1) } : current,
+    )
   }
 
   const hasMore = pagination ? posts.length < pagination.total : false
@@ -147,31 +161,39 @@ export function PostFeed({ heading }: { heading?: string }) {
 
         {!loading && !error && posts.length === 0 && (
           <div className="rounded-2xl border border-dashed border-line bg-panel p-10 text-center">
-            <p className="font-display text-4xl uppercase">Todavía no hay historias</p>
-            <p className="mx-auto mt-3 max-w-md text-mute">
-              {user
-                ? 'Sé la primera persona en compartir un logro con la comunidad.'
-                : 'Cuando los miembros publiquen, sus historias aparecerán acá.'}
+            <p className="font-display text-4xl uppercase">
+              {authorId ? 'Sin publicaciones todavía' : 'Todavía no hay historias'}
             </p>
-            {user ? (
-              <Link
-                to="/crear"
-                className="mt-6 inline-block rounded-md bg-brand px-6 py-3 font-bold text-ink hover:bg-white"
-              >
-                Crear la primera publicación
-              </Link>
-            ) : (
-              <Link
-                to="/register"
-                className="mt-6 inline-block rounded-md bg-brand px-6 py-3 font-bold text-ink hover:bg-white"
-              >
-                Unirme a Hub3
-              </Link>
-            )}
+            <p className="mx-auto mt-3 max-w-md text-mute">
+              {authorId
+                ? 'Cuando este miembro publique, sus historias van a aparecer acá.'
+                : user
+                  ? 'Sé la primera persona en compartir un logro con la comunidad.'
+                  : 'Cuando los miembros publiquen, sus historias aparecerán acá.'}
+            </p>
+            {!authorId &&
+              (user ? (
+                <Link
+                  to="/crear"
+                  className="mt-6 inline-block rounded-md bg-brand px-6 py-3 font-bold text-ink hover:bg-white"
+                >
+                  Crear la primera publicación
+                </Link>
+              ) : (
+                <Link
+                  to="/register"
+                  className="mt-6 inline-block rounded-md bg-brand px-6 py-3 font-bold text-ink hover:bg-white"
+                >
+                  Unirme a Hub3
+                </Link>
+              ))}
           </div>
         )}
 
-        {!loading && !error && posts.map((post) => <PostCard key={post.id} post={post} />)}
+        {!loading && !error &&
+          posts.map((post) => (
+            <PostCard key={post.id} post={post} onDeleted={handleDeleted} />
+          ))}
 
         {!loading && !error && hasMore && (
           <div className="flex justify-center pt-2">

@@ -163,3 +163,33 @@ body::before {
   background: #2a2a33;
   border-radius: 999px;
 }
+
+/* Impresión: solo la credencial, sobre fondo claro. */
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-credential,
+  .print-credential * {
+    visibility: visible;
+  }
+  .print-credential {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: 0 !important;
+    background: #ffffff !important;
+    color: #0e0e12 !important;
+  }
+  .print-credential .text-mute,
+  .print-credential .text-brand {
+    color: #2f9e62 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

@@ -20,6 +20,10 @@ import type {
   RegisterPayload,
   SessionUser,
   UpdateCommentResponse,
+  UpdatePostPayload,
+  UpdateProfilePayload,
+  UpdateProfileResponse,
+  UserPublic,
   UserRole,
   UserUpdateResponse,
 } from '../types'
@@ -224,19 +228,57 @@ export const api = {
     return request<SessionUser>('/users/me', { auth: true })
   },
 
-  listPosts(sort: FeedSort, limit: number, offset: number): Promise<PostListResponse> {
+  listPosts(
+    sort: FeedSort,
+    limit: number,
+    offset: number,
+    authorId?: string,
+  ): Promise<PostListResponse> {
     const params = new URLSearchParams({
       sort,
       limit: String(limit),
       offset: String(offset),
     })
+    if (authorId) params.set('author_id', authorId)
     // auth: true envía el token si existe para recibir liked_by_me.
     // El endpoint es público, así que sin sesión sigue funcionando.
     return request<PostListResponse>(`/posts?${params.toString()}`, { auth: true })
   },
 
+  getPost(id: number): Promise<Post> {
+    return request<Post>(`/posts/${id}`, { auth: true })
+  },
+
   createPost(payload: CreatePostPayload): Promise<Post> {
     return request<Post>('/posts', { method: 'POST', body: payload, auth: true })
+  },
+
+  updatePost(id: number, payload: UpdatePostPayload): Promise<Post> {
+    return request<Post>(`/posts/${id}`, { method: 'PUT', body: payload, auth: true })
+  },
+
+  deletePost(id: number): Promise<{ message: string }> {
+    return request<{ message: string }>(`/posts/${id}`, { method: 'DELETE', auth: true })
+  },
+
+  getPublicUserByUsername(username: string): Promise<UserPublic> {
+    return request<UserPublic>(`/users/by-username/${encodeURIComponent(username)}`)
+  },
+
+  updateProfile(payload: UpdateProfilePayload): Promise<UpdateProfileResponse> {
+    return request<UpdateProfileResponse>('/users/me', {
+      method: 'PUT',
+      body: payload,
+      auth: true,
+    })
+  },
+
+  changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    return request<{ message: string }>('/users/me/password', {
+      method: 'PATCH',
+      body: { current_password: currentPassword, new_password: newPassword },
+      auth: true,
+    })
   },
 
   likePost(postID: number): Promise<LikeResponse> {

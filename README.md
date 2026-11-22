@@ -53,10 +53,12 @@ Sin `VITE_API_URL` la constante `API_URL` queda vacía y las peticiones apuntan 
 | `/feed` | Público | Publicaciones con filtros `Recientes` y `Más gustadas` |
 | `/discografia` | Público | Discografía estática cargada desde `public/data/discography.json` |
 | `/verificar/:token` | Público | Verificación del QR de una credencial |
+| `/u/:username` | Público | Perfil público con nombre, `@username` y solo sus publicaciones |
 | `/login` | Público | Inicio de sesión con email o usuario |
 | `/register` | Público | Registro con aprobación pendiente |
 | `/crear` | Autenticado | Publicación con hasta 6 elementos de media |
-| `/perfil` | Autenticado | Datos de la cuenta y credencial digital con QR |
+| `/publicaciones/:id/editar` | Autor | Edición de una publicación propia |
+| `/perfil` | Autenticado | Datos, edición de perfil, contraseña y credencial con QR |
 | `/admin` | Admin | Usuarios, aprobaciones, roles y credenciales |
 
 El acceso se resuelve con `ProtectedRoute`; el rol se valida contra el backend, que es la autoridad final.
@@ -87,12 +89,20 @@ El contenido es estático: se edita `public/data/discography.json` y la página 
 - `GET /credentials/me/qr` devuelve el serial y el token de la credencial propia.
 - El QR se genera localmente con `qrcode.react` y apunta a `{QR_BASE_URL}/verificar/{token}`; esa base la define el backend con la variable `QR_BASE_URL`.
 - `/verificar/:token` consulta `GET /credentials/verify/{token}` y muestra si la credencial es válida.
+- La credencial se puede descargar como PNG (se compone en un canvas con el QR) o imprimir con el botón **Imprimir**; la hoja de impresión oculta el resto de la página.
+
+## Perfiles, edición y media
+
+- Los autores pueden editar o eliminar sus propias publicaciones desde el menú `⋯` de cada tarjeta.
+- Los admins y superadmins solo pueden eliminar publicaciones ajenas, no editarlas.
+- El avatar del perfil se configura pegando una URL pública (por ejemplo DiceBear o Gravatar); no hay subida de archivos.
+- Las imágenes del feed se abren en un visor modal y se cierran con Escape, con el botón o al hacer clic fuera.
 
 ## Despliegue
 
 1. Configurar `VITE_API_URL` con el dominio del backend en el panel del hosting (Vercel, Netlify, Cloudflare Pages, etc.).
 2. Publicar el resultado de `npm run build` (`dist/`).
-3. Habilitar **SPA fallback** (redirigir rutas desconocidas a `index.html`) para que `/feed`, `/discografia`, `/verificar/:token`, `/admin` y `/perfil` funcionen al recargar.
+3. Habilitar **SPA fallback** (redirigir rutas desconocidas a `index.html`) para que `/feed`, `/discografia`, `/verificar/:token`, `/u/:username`, `/publicaciones/:id/editar`, `/admin` y `/perfil` funcionen al recargar.
 4. Agregar el dominio del frontend a `CORS_ALLOWED_ORIGINS` y a `QR_BASE_URL` en el backend, y a la política CORS del bucket R2 (`PUT` y `Content-Type`) para que funcionen las subidas firmadas.
 
 ## Estructura
