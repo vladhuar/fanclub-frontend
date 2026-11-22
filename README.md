@@ -84,6 +84,13 @@ El video se reproduce en loop, silenciado y con `playsInline`. Con `prefers-redu
 
 El contenido es estático: se edita `public/data/discography.json` y la página lo carga con `fetch` al entrar a `/discografia`. No requiere cambios en el backend.
 
+## Panel de administración
+
+- `/admin` lista usuarios y credenciales con **paginación y búsqueda server-side**: cada cambio de texto o de filtro consulta `GET /users` o `GET /credentials` con `q`, `status`, `limit` y `offset`.
+- Los usuarios muestran tarjetas con totales globales (`counts`) provistos por el backend; aprobar, desactivar o cambiar un rol recarga la página actual y los totales.
+- Al emitir una credencial, los candidatos se piden a `GET /users?status=active&credential=none`, así que el formulario no depende de descargar todos los usuarios.
+- Cada credencial ya trae `user_name`, `user_username` y `user_avatar_url`; el panel no necesita cruzar listas en el navegador.
+
 ## Credencial y QR
 
 - `GET /credentials/me/qr` devuelve el serial y el token de la credencial propia.

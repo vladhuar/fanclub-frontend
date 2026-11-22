@@ -6,7 +6,14 @@ import { Avatar } from '../components/Avatar'
 import { Alert, Spinner, inputClass } from '../components/ui'
 import { api } from '../lib/api'
 import { formatLongDate } from '../lib/format'
-import type { AdminUser, Credential, QRTokenResponse, UserRole } from '../types'
+import type {
+  AdminUser,
+  Credential,
+  Pagination,
+  QRTokenResponse,
+  UserCounts,
+  UserRole,
+} from '../types'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   member: 'Miembro',
@@ -16,9 +23,53 @@ const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 type Filter = 'pending' | 'active' | 'all'
+type CredentialFilter = 'all' | 'active' | 'inactive'
+
+/** Tamaño de página compartido por los listados del panel admin. */
+const PAGE_SIZE = 20
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'No pudimos completar la acción.'
+}
+
+/** Controles de paginación por offset reutilizados por usuarios y credenciales. */
+function PaginationControls({
+  pagination,
+  loading,
+  onPage,
+}: {
+  pagination: Pagination | null
+  loading: boolean
+  onPage: (offset: number) => void
+}) {
+  if (!pagination || pagination.total <= pagination.limit) return null
+
+  const page = Math.floor(pagination.offset / pagination.limit) + 1
+  const pages = Math.max(1, Math.ceil(pagination.total / pagination.limit))
+
+  return (
+    <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Paginación">
+      <button
+        type="button"
+        onClick={() => onPage(Math.max(0, pagination.offset - pagination.limit))}
+        disabled={loading || page <= 1}
+        className="rounded-md border border-line px-4 py-2 text-sm font-bold transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+      >
+        Anterior
+      </button>
+      <p className="text-sm text-mute">
+        Página {page} de {pages}
+      </p>
+      <button
+        type="button"
+        onClick={() => onPage(pagination.offset + pagination.limit)}
+        disabled={loading || page >= pages}
+        className="rounded-md border border-line px-4 py-2 text-sm font-bold transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+      >
+        Siguiente
+      </button>
+    </nav>
+  )
 }
 
 function StatusBadge({ active }: { active: boolean }) {
@@ -39,27 +90,47 @@ function StatusBadge({ active }: { active: boolean }) {
 export function AdminPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [pagination, setPagination] = useState<Pagination | null>(null)
+  const [counts, setCounts] = useState<UserCounts>({ pending: 0, active: 0, total: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('pending')
   const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [offset, setOffset] = useState(0)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null)
   const [tab, setTab] = useState<'users' | 'credentials'>('users')
+
+  // La búsqueda se envía al backend con un pequeño debounce.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setQuery(search.trim())
+      setOffset(0)
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [search])
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await api.listUsers()
-      setUsers(response ?? [])
+      const response = await api.listUsers({
+        q: query || undefined,
+        status: filter,
+        limit: PAGE_SIZE,
+        offset,
+      })
+      setUsers(response.data ?? [])
+      setPagination(response.pagination)
+      setCounts(response.counts)
     } catch (cause) {
       setError(messageOf(cause))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filter, offset, query])
 
   useEffect(() => {
     void loadUsers()
@@ -67,33 +138,10 @@ export function AdminPage() {
 
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    return users
-      .filter((target) =>
-        filter === 'all' ? true : filter === 'pending' ? !target.active : target.active,
-      )
-      .filter((target) =>
-        term
-          ? [target.name, target.username, target.email].some((value) =>
-              value.toLowerCase().includes(term),
-            )
-          : true,
-      )
-      .sort((a, b) => {
-        if (a.active !== b.active) return a.active ? 1 : -1
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      })
-  }, [users, filter, search])
-
-  const counts = useMemo(
-    () => ({
-      pending: users.filter((target) => !target.active).length,
-      active: users.filter((target) => target.active).length,
-      total: users.length,
-    }),
-    [users],
-  )
+  const selectFilter = (value: Filter) => {
+    setFilter(value)
+    setOffset(0)
+  }
 
   if (!user || !isAdmin) {
     return <Navigate to="/" replace />
@@ -117,15 +165,13 @@ export function AdminPage() {
     setError(null)
     setNotice(null)
     try {
-      const response = await api.setUserActive(target.id, active)
-      setUsers((current) =>
-        current.map((item) => (item.id === target.id ? response.user : item)),
-      )
+      await api.setUserActive(target.id, active)
       setNotice(
         active
           ? `${target.name} fue aprobado y ya puede iniciar sesión.`
           : `${target.name} fue desactivado.`,
       )
+      await loadUsers()
     } catch (cause) {
       setError(messageOf(cause))
     } finally {
@@ -139,11 +185,9 @@ export function AdminPage() {
     setError(null)
     setNotice(null)
     try {
-      const response = await api.setUserRole(target.id, role)
-      setUsers((current) =>
-        current.map((item) => (item.id === target.id ? response.user : item)),
-      )
+      await api.setUserRole(target.id, role)
       setNotice(`El rol de ${target.name} ahora es ${ROLE_LABELS[role].toLowerCase()}.`)
+      await loadUsers()
     } catch (cause) {
       setError(messageOf(cause))
     } finally {
@@ -210,7 +254,7 @@ export function AdminPage() {
             <button
               key={value}
               type="button"
-              onClick={() => setFilter(value)}
+              onClick={() => selectFilter(value)}
               aria-pressed={filter === value}
               className={`rounded-2xl border p-4 text-left transition-colors ${
                 filter === value
@@ -236,7 +280,8 @@ export function AdminPage() {
             />
           </label>
           <p className="text-sm text-mute">
-            {filtered.length} {filtered.length === 1 ? 'usuario' : 'usuarios'}
+            {pagination?.total ?? 0}{' '}
+            {(pagination?.total ?? 0) === 1 ? 'usuario' : 'usuarios'}
           </p>
         </div>
 
@@ -258,7 +303,7 @@ export function AdminPage() {
               aprobación.{' '}
               <button
                 type="button"
-                onClick={() => setFilter('pending')}
+                onClick={() => selectFilter('pending')}
                 className="font-bold text-brand hover:text-white"
               >
                 Revisarlas
@@ -274,7 +319,7 @@ export function AdminPage() {
             </div>
           )}
 
-          {!loading && filtered.length === 0 && (
+          {!loading && users.length === 0 && (
             <div className="rounded-2xl border border-dashed border-line bg-panel p-10 text-center">
               <p className="font-display text-3xl uppercase">
                 {filter === 'pending' ? 'No hay solicitudes pendientes' : 'Sin resultados'}
@@ -290,7 +335,7 @@ export function AdminPage() {
           )}
 
           {!loading &&
-            filtered.map((target) => {
+            users.map((target) => {
               const manageable = canManage(target)
               const options = roleOptions(target)
               const place = [target.city, target.country].filter(Boolean).join(', ')
@@ -386,10 +431,16 @@ export function AdminPage() {
               )
             })}
         </div>
+
+        <PaginationControls
+          pagination={pagination}
+          loading={loading}
+          onPage={(next) => setOffset(Math.max(0, next))}
+        />
           </>
         )}
 
-        {tab === 'credentials' && <CredentialsPanel users={users} onUsersChanged={loadUsers} />}
+        {tab === 'credentials' && <CredentialsPanel />}
       </div>
     </section>
   )
@@ -404,54 +455,92 @@ function verifyURL(token: string): string {
 }
 
 /** Pestaña de credenciales: emisión, estado y rotación de QR. */
-function CredentialsPanel({
-  users,
-  onUsersChanged,
-}: {
-  users: AdminUser[]
-  onUsersChanged: () => Promise<void>
-}) {
+function CredentialsPanel() {
   const [credentials, setCredentials] = useState<Credential[]>([])
+  const [pagination, setPagination] = useState<Pagination | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<CredentialFilter>('all')
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [offset, setOffset] = useState(0)
 
+  const [candidates, setCandidates] = useState<AdminUser[]>([])
+  const [loadingCandidates, setLoadingCandidates] = useState(true)
   const [selectedUser, setSelectedUser] = useState('')
   const [tier, setTier] = useState<Tier>('Standard')
   const [creating, setCreating] = useState(false)
 
   const [qr, setQr] = useState<{ credential: Credential; data: QRTokenResponse } | null>(null)
 
+  // La búsqueda se envía al backend con un pequeño debounce.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setQuery(search.trim())
+      setOffset(0)
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [search])
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await api.listCredentials()
-      setCredentials(response ?? [])
+      const response = await api.listCredentials({
+        q: query || undefined,
+        status: filter,
+        limit: PAGE_SIZE,
+        offset,
+      })
+      setCredentials(response.data ?? [])
+      setPagination(response.pagination)
     } catch (cause) {
       setError(messageOf(cause))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filter, offset, query])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  const byUser = useMemo(() => {
-    const map = new Map<string, AdminUser>()
-    users.forEach((target) => map.set(target.id, target))
-    return map
-  }, [users])
+  // Los candidatos salen del backend: activos y todavía sin credencial.
+  // Se recorren las páginas para no perder cuentas si hay más de 100.
+  const loadCandidates = useCallback(async () => {
+    setLoadingCandidates(true)
+    try {
+      const collected: AdminUser[] = []
+      let nextOffset = 0
+      for (;;) {
+        const response = await api.listUsers({
+          status: 'active',
+          credential: 'none',
+          limit: 100,
+          offset: nextOffset,
+        })
+        collected.push(...(response.data ?? []))
+        nextOffset += response.pagination.limit
+        if (nextOffset >= response.pagination.total) break
+      }
+      setCandidates(collected)
+    } catch (cause) {
+      setError(messageOf(cause))
+    } finally {
+      setLoadingCandidates(false)
+    }
+  }, [])
 
-  const eligible = useMemo(() => {
-    const withCredential = new Set(credentials.map((item) => item.user_id))
-    return users
-      .filter((target) => target.active && !withCredential.has(target.id))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [users, credentials])
+  useEffect(() => {
+    void loadCandidates()
+  }, [loadCandidates])
+
+  const eligible = useMemo(
+    () => [...candidates].sort((a, b) => a.name.localeCompare(b.name)),
+    [candidates],
+  )
 
   useEffect(() => {
     if (!selectedUser && eligible.length > 0) setSelectedUser(eligible[0].id)
@@ -460,6 +549,11 @@ function CredentialsPanel({
     }
   }, [eligible, selectedUser])
 
+  const selectFilter = (value: CredentialFilter) => {
+    setFilter(value)
+    setOffset(0)
+  }
+
   const create = async () => {
     if (!selectedUser || creating) return
     setCreating(true)
@@ -467,9 +561,13 @@ function CredentialsPanel({
     setNotice(null)
     try {
       const created = await api.createCredential({ user_id: selectedUser, tier })
-      setCredentials((current) => [created, ...current])
       setNotice(`Credencial ${created.serial_number} emitida.`)
-      void onUsersChanged()
+      if (offset === 0) {
+        await load()
+      } else {
+        setOffset(0)
+      }
+      await loadCandidates()
     } catch (cause) {
       setError(messageOf(cause))
     } finally {
@@ -484,14 +582,12 @@ function CredentialsPanel({
     setNotice(null)
     try {
       const updated = await api.setCredentialActive(credential.id, !credential.is_active)
-      setCredentials((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      )
       setNotice(
         updated.is_active
           ? `La credencial ${updated.serial_number} fue activada.`
           : `La credencial ${updated.serial_number} fue desactivada.`,
       )
+      await load()
     } catch (cause) {
       setError(messageOf(cause))
     } finally {
@@ -544,7 +640,11 @@ function CredentialsPanel({
           Solo usuarios activos y sin credencial previa. El serial se genera automáticamente.
         </p>
 
-        {eligible.length === 0 ? (
+        {loadingCandidates ? (
+          <div className="mt-4 grid place-items-center rounded-md border border-dashed border-line px-4 py-6">
+            <Spinner label="Buscando candidatos…" />
+          </div>
+        ) : eligible.length === 0 ? (
           <p className="mt-4 rounded-md border border-dashed border-line px-4 py-3 text-sm text-mute">
             No hay usuarios activos sin credencial.
           </p>
@@ -597,12 +697,51 @@ function CredentialsPanel({
         <h2 className="font-display text-2xl uppercase">Credenciales</h2>
         <button
           type="button"
-          onClick={() => void load()}
+          onClick={() => {
+            void load()
+            void loadCandidates()
+          }}
           disabled={loading}
           className="rounded-md border border-line px-4 py-2 text-sm font-bold transition-colors hover:border-brand hover:text-brand disabled:opacity-60"
         >
           {loading ? 'Actualizando…' : 'Recargar'}
         </button>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="w-full sm:max-w-sm">
+          <span className="sr-only">Buscar credenciales</span>
+          <input
+            type="search"
+            className={inputClass}
+            placeholder="Buscar por serial, nombre, usuario o email…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              ['all', 'Todas'],
+              ['active', 'Activas'],
+              ['inactive', 'Inactivas'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => selectFilter(value)}
+              aria-pressed={filter === value}
+              className={`rounded-md border px-3 py-2 text-sm font-bold transition-colors ${
+                filter === value
+                  ? 'border-brand bg-brand/10 text-brand'
+                  : 'border-line text-mute hover:border-brand/60 hover:text-paper'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading && (
@@ -613,15 +752,22 @@ function CredentialsPanel({
 
       {!loading && credentials.length === 0 && (
         <div className="rounded-2xl border border-dashed border-line bg-panel p-10 text-center">
-          <p className="font-display text-3xl uppercase">Todavía no hay credenciales</p>
-          <p className="mt-3 text-mute">Emití la primera con el formulario de arriba.</p>
+          <p className="font-display text-3xl uppercase">
+            {query || filter !== 'all' ? 'Sin resultados' : 'Todavía no hay credenciales'}
+          </p>
+          <p className="mt-3 text-mute">
+            {query || filter !== 'all'
+              ? 'Probá con otro término o cambiá el filtro de estado.'
+              : 'Emití la primera con el formulario de arriba.'}
+          </p>
         </div>
       )}
 
       {!loading && credentials.length > 0 && (
         <div className="space-y-3">
           {credentials.map((credential) => {
-            const owner = byUser.get(credential.user_id)
+            const ownerName = credential.user_name || 'Usuario desconocido'
+            const ownerUsername = credential.user_username
             return (
               <article
                 key={credential.id}
@@ -629,11 +775,13 @@ function CredentialsPanel({
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <Avatar name={owner?.name ?? 'Miembro'} src={owner?.avatar_url} />
+                    <Avatar name={ownerName} src={credential.user_avatar_url ?? undefined} />
                     <div className="min-w-0">
                       <p className="truncate font-bold">
-                        {owner?.name ?? 'Usuario desconocido'}
-                        {owner && <span className="ml-2 text-sm font-normal text-mute">@{owner.username}</span>}
+                        {ownerName}
+                        {ownerUsername && (
+                          <span className="ml-2 text-sm font-normal text-mute">@{ownerUsername}</span>
+                        )}
                       </p>
                       <p className="mt-0.5 break-all font-mono text-xs text-mute">
                         {credential.serial_number}
@@ -691,6 +839,12 @@ function CredentialsPanel({
         </div>
       )}
 
+      <PaginationControls
+        pagination={pagination}
+        loading={loading}
+        onPage={(next) => setOffset(Math.max(0, next))}
+      />
+
       {qr && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-ink/80 p-5"
@@ -720,7 +874,7 @@ function CredentialsPanel({
               />
             </div>
             <p className="mt-3 text-sm text-mute">
-              {byUser.get(qr.credential.user_id)?.name ?? 'Miembro'}
+              {qr.credential.user_name || 'Miembro'}
             </p>
             <button
               type="button"

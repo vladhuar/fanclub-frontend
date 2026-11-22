@@ -148,6 +148,29 @@ export interface AdminUser extends UserPublic {
   approved_by?: string | null
 }
 
+/** Totales del panel admin, independientes de la página solicitada. */
+export interface UserCounts {
+  pending: number
+  active: number
+  total: number
+}
+
+/** Filtros aceptados por GET /users. */
+export interface UserListParams {
+  q?: string
+  status?: 'all' | 'active' | 'pending'
+  /** Solo cuentas activas que todavía no tienen credencial. */
+  credential?: 'none'
+  limit?: number
+  offset?: number
+}
+
+export interface UserListResponse {
+  data: AdminUser[] | null
+  pagination: Pagination
+  counts: UserCounts
+}
+
 export interface UserUpdateResponse {
   message: string
   user: AdminUser
@@ -169,6 +192,24 @@ export interface Credential {
   avatar_url?: string | null
   is_active: boolean
   issued_at: string
+  /** Datos del dueño incluidos por el backend en el listado admin. */
+  user_name?: string
+  user_username?: string
+  user_avatar_url?: string | null
+}
+
+/** Filtros aceptados por GET /credentials. */
+export interface CredentialListParams {
+  q?: string
+  status?: 'all' | 'active' | 'inactive'
+  user_id?: string
+  limit?: number
+  offset?: number
+}
+
+export interface CredentialListResponse {
+  data: Credential[] | null
+  pagination: Pagination
 }
 
 export interface CreateCredentialPayload {

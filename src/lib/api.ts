@@ -9,6 +9,8 @@ import type {
   CreateCredentialPayload,
   CreatePostPayload,
   Credential,
+  CredentialListParams,
+  CredentialListResponse,
   CredentialVerification,
   FeedSort,
   LikeResponse,
@@ -23,6 +25,8 @@ import type {
   UpdatePostPayload,
   UpdateProfilePayload,
   UpdateProfileResponse,
+  UserListParams,
+  UserListResponse,
   UserPublic,
   UserRole,
   UserUpdateResponse,
@@ -305,9 +309,17 @@ export const api = {
     return request<QRTokenResponse>('/credentials/me/qr', { auth: true })
   },
 
-  listCredentials(userID?: string): Promise<Credential[]> {
-    const query = userID ? `?user_id=${encodeURIComponent(userID)}` : ''
-    return request<Credential[]>(`/credentials${query}`, { auth: true })
+  listCredentials(params: CredentialListParams = {}): Promise<CredentialListResponse> {
+    const query = new URLSearchParams()
+    if (params.q) query.set('q', params.q)
+    if (params.status) query.set('status', params.status)
+    if (params.user_id) query.set('user_id', params.user_id)
+    if (params.limit) query.set('limit', String(params.limit))
+    if (params.offset) query.set('offset', String(params.offset))
+    const suffix = query.toString()
+    return request<CredentialListResponse>(`/credentials${suffix ? `?${suffix}` : ''}`, {
+      auth: true,
+    })
   },
 
   createCredential(payload: CreateCredentialPayload): Promise<Credential> {
@@ -337,8 +349,15 @@ export const api = {
     return request<CredentialVerification>(`/credentials/verify/${encodeURIComponent(token)}`)
   },
 
-  listUsers(): Promise<AdminUser[]> {
-    return request<AdminUser[]>('/users', { auth: true })
+  listUsers(params: UserListParams = {}): Promise<UserListResponse> {
+    const query = new URLSearchParams()
+    if (params.q) query.set('q', params.q)
+    if (params.status) query.set('status', params.status)
+    if (params.credential) query.set('credential', params.credential)
+    if (params.limit) query.set('limit', String(params.limit))
+    if (params.offset) query.set('offset', String(params.offset))
+    const suffix = query.toString()
+    return request<UserListResponse>(`/users${suffix ? `?${suffix}` : ''}`, { auth: true })
   },
 
   setUserActive(id: string, active: boolean): Promise<UserUpdateResponse> {
